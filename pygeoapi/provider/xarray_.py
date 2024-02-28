@@ -88,28 +88,118 @@ class XarrayProvider(BaseProvider):
                          self._coverage_properties['y_axis_label'],
                          self._coverage_properties['time_axis_label']]
 
-            self.fields = self.get_fields()
+            self.fields = self._coverage_properties['fields']
         except Exception as err:
             LOGGER.warning(err)
             raise ProviderConnectionError(err)
 
-    def get_fields(self):
-        fields = {}
+    def get_coverage_domainset(self, *args, **kwargs):
+        """
+        Provide coverage domainset
 
-        for key, value in self._data.variables.items():
-            if len(value.shape) >= 3:
-                LOGGER.debug('Adding variable')
-                dtype = value.dtype
-                if dtype.name.startswith('float'):
-                    dtype = 'number'
+        :returns: CIS JSON object of domainset metadata
+        """
 
-                fields[key] = {
-                    'type': dtype,
-                    'title': value.attrs['long_name'],
-                    'x-ogc-unit': value.attrs.get('units')
+        c_props = self._coverage_properties
+        domainset = {
+            'type': 'DomainSet',
+            'generalGrid': {
+                'type': 'GeneralGridCoverage',
+                'srsName': c_props['bbox_crs'],
+                'axisLabels': [
+                    c_props['x_axis_label'],
+                    c_props['y_axis_label'],
+                    c_props['time_axis_label']
+                ],
+                'axis': [{
+                    'type': 'RegularAxis',
+                    'axisLabel': c_props['x_axis_label'],
+                    'lowerBound': c_props['bbox'][0],
+                    'upperBound': c_props['bbox'][2],
+                    'uomLabel': c_props['bbox_units'],
+                    'resolution': c_props['resx']
+                }, {
+                    'type': 'RegularAxis',
+                    'axisLabel': c_props['y_axis_label'],
+                    'lowerBound': c_props['bbox'][1],
+                    'upperBound': c_props['bbox'][3],
+                    'uomLabel': c_props['bbox_units'],
+                    'resolution': c_props['resy']
+                },
+                    {
+                        'type': 'RegularAxis',
+                        'axisLabel': c_props['time_axis_label'],
+                        'lowerBound': c_props['time_range'][0],
+                        'upperBound': c_props['time_range'][1],
+                        'uomLabel': c_props['restime'],
+                        'resolution': c_props['restime']
+                    }
+                ],
+                'gridLimits': {
+                    'type': 'GridLimits',
+                    'srsName': 'http://www.opengis.net/def/crs/OGC/0/Index2D',
+                    'axisLabels': ['i', 'j'],
+                    'axis': [{
+                        'type': 'IndexAxis',
+                        'axisLabel': 'i',
+                        'lowerBound': 0,
+                        'upperBound': c_props['width']
+                    }, {
+                        'type': 'IndexAxis',
+                        'axisLabel': 'j',
+                        'lowerBound': 0,
+                        'upperBound': c_props['height']
+                    }]
                 }
+            },
+            '_meta': {
+                'tags': self._data.attrs
+            }
+        }
 
-        return fields
+        return domainset
+
+    def get_coverage_rangetype(self, *args, **kwargs):
+        """
+        Provide coverage rangetype
+
+        :returns: CIS JSON object of rangetype metadata
+        """
+
+        rangetype = {
+            'type': 'DataRecord',
+            'field': []
+        }
+
+        for name, var in self._data.variables.items():
+            LOGGER.debug(f'Determining rangetype for {name}')
+
+            desc, units = None, None
+            if len(var.shape) >= 3:
+                parameter = self._get_parameter_metadata(
+                    name, var.attrs)
+                desc = parameter['description']
+                units = parameter['unit_label']
+
+                rangetype['field'].append({
+                    'id': name,
+                    'type': 'Quantity',
+                    'name': var.attrs.get('long_name') or desc,
+                    'encodingInfo': {
+                        'dataType': f'http://www.opengis.net/def/dataType/OGC/0/{var.dtype}'  # noqa
+                    },
+                    'nodata': 'null',
+                    'uom': {
+                        'id': f'http://www.opengis.net/def/uom/UCUM/{units}',
+                        'type': 'UnitReference',
+                        'code': units
+                    },
+                    '_meta': {
+                        'tags': var.attrs
+                    }
+                })
+
+        return rangetype
 
     def query(self, properties=[], subsets={}, bbox=[], bbox_crs=4326,
               datetime_=None, format_='json', **kwargs):
@@ -134,7 +224,7 @@ class XarrayProvider(BaseProvider):
                 return read_data(self.data)
 
         if len(properties) < 1:
-            properties = self.fields.keys()
+            properties = self.fields
 
         data = self._data[[*properties]]
 
@@ -232,13 +322,13 @@ class XarrayProvider(BaseProvider):
                 fp.seek(0)
                 return fp.read()
 
-    def gen_covjson(self, metadata, data, fields):
+    def gen_covjson(self, metadata, data, range_type):
         """
         Generate coverage as CoverageJSON representation
 
         :param metadata: coverage metadata
         :param data: rasterio DatasetReader object
-        :param fields: fields dict
+        :param range_type: range type list
 
         :returns: dict of CoverageJSON representation
         """
@@ -295,31 +385,34 @@ class XarrayProvider(BaseProvider):
             'ranges': {}
         }
 
-        for key, value in self.fields.items():
+        for variable in range_type:
+            pm = self._get_parameter_metadata(
+                variable, self._data[variable].attrs)
+
             parameter = {
                 'type': 'Parameter',
-                'description': value['title'],
+                'description': pm['description'],
                 'unit': {
-                    'symbol': value['x-ogc-unit']
+                    'symbol': pm['unit_label']
                 },
                 'observedProperty': {
-                    'id': key,
+                    'id': pm['observed_property_id'],
                     'label': {
-                        'en': value['title']
+                        'en': pm['observed_property_name']
                     }
                 }
             }
 
-            cj['parameters'][key] = parameter
+            cj['parameters'][pm['id']] = parameter
 
         data = data.fillna(None)
         data = _convert_float32_to_float64(data)
 
         try:
-            for key, value in self.fields.items():
+            for key in cj['parameters'].keys():
                 cj['ranges'][key] = {
                     'type': 'NdArray',
-                    'dataType': value['type'],
+                    'dataType': str(self._data[variable].dtype),
                     'axisNames': [
                         'y', 'x', self._coverage_properties['time_axis_label']
                     ],
@@ -342,15 +435,14 @@ class XarrayProvider(BaseProvider):
         """
 
         time_var, y_var, x_var = [None, None, None]
-
         for coord in self._data.coords:
             if coord.lower() == 'time':
                 time_var = coord
                 continue
-            if self._data.coords[coord].attrs.get('units') == 'degrees_north':
+            if self._data.coords[coord].attrs['units'] == 'degrees_north':
                 y_var = coord
                 continue
-            if self._data.coords[coord].attrs.get('units') == 'degrees_east':
+            if self._data.coords[coord].attrs['units'] == 'degrees_east':
                 x_var = coord
                 continue
 
@@ -410,6 +502,9 @@ class XarrayProvider(BaseProvider):
             properties['y_axis_label'],
             properties['time_axis_label']
         ]
+
+        properties['fields'] = [name for name in self._data.variables
+                                if len(self._data.variables[name].shape) >= 3]
 
         return properties
 

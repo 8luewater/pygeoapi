@@ -117,12 +117,19 @@ Delete an item from a collection:
 Raster data
 -----------
 
-Collection coverage schema
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+Collection coverage domainset
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This page provides information on a collection coverage information.
+This page provides information on a collection coverage spatial properties and axis information.
 
-http://localhost:5000/collections/gdps-temperature/schema
+http://localhost:5000/collections/gdps-temperature/coverage/domainset
+
+Collection coverage rangetype
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This page provides information on a collection coverage rangetype (bands) information.
+
+http://localhost:5000/collections/gdps-temperature/coverage/rangetype
 
 Collection coverage data
 ^^^^^^^^^^^^^^^^^^^^^^^^

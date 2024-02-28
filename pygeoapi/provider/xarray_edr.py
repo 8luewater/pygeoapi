@@ -33,11 +33,7 @@ import numpy as np
 
 from pygeoapi.provider.base import ProviderNoDataError, ProviderQueryError
 from pygeoapi.provider.base_edr import BaseEDRProvider
-from pygeoapi.provider.xarray_ import (
-    _to_datetime_string,
-    _convert_float32_to_float64,
-    XarrayProvider,
-)
+from pygeoapi.provider.xarray_ import _to_datetime_string, XarrayProvider
 
 LOGGER = logging.getLogger(__name__)
 
@@ -56,6 +52,15 @@ class XarrayEDRProvider(BaseEDRProvider, XarrayProvider):
 
         BaseEDRProvider.__init__(self, provider_def)
         XarrayProvider.__init__(self, provider_def)
+
+    def get_fields(self):
+        """
+        Get provider field information (names, types)
+
+        :returns: dict of dicts of parameters
+        """
+
+        return self.get_coverage_rangetype()
 
     @BaseEDRProvider.register()
     def position(self, **kwargs):
@@ -109,29 +114,21 @@ class XarrayEDRProvider(BaseEDRProvider, XarrayProvider):
 
         try:
             if select_properties:
-                self.fields = {k: v for k, v in self.fields.items() if k in select_properties}  # noqa
+                self.fields = select_properties
                 data = self._data[[*select_properties]]
             else:
                 data = self._data
-
-            if self.time_field in query_params:
-                remaining_query = {
-                    key: val for key, val in query_params.items()
-                    if key != self.time_field
-                }
-                if isinstance(query_params[self.time_field], slice):
-                    time_query = {
-                        self.time_field: query_params[self.time_field]
-                    }
-                else:
-                    time_query = {
-                        self.time_field: (
-                                data[self.time_field].dt.date ==
-                                query_params[self.time_field]
-                        )
-                    }
-                data = data.sel(
-                    time_query).sel(remaining_query, method='nearest')
+            if (datetime_ is not None and
+                isinstance(query_params[self.time_field], slice)): # noqa
+                # separate query into spatial and temporal components
+                LOGGER.debug('Separating temporal query')
+                time_query = {self.time_field:
+                              query_params[self.time_field]}
+                remaining_query = {key: val for key,
+                                   val in query_params.items()
+                                   if key != self.time_field}
+                data = data.sel(time_query).sel(remaining_query,
+                                                method='nearest')
             else:
                 data = data.sel(query_params, method='nearest')
         except KeyError:
@@ -183,11 +180,9 @@ class XarrayEDRProvider(BaseEDRProvider, XarrayProvider):
         LOGGER.debug(f"Query type: {kwargs.get('query_type')}")
 
         bbox = kwargs.get('bbox')
-        xmin, ymin, xmax, ymax = self._configure_bbox(bbox)
-
         if len(bbox) == 4:
-            query_params[self.x_field] = slice(bbox[xmin], bbox[xmax])
-            query_params[self.y_field] = slice(bbox[ymin], bbox[ymax])
+            query_params[self.x_field] = slice(bbox[0], bbox[2])
+            query_params[self.y_field] = slice(bbox[1], bbox[3])
         else:
             raise ProviderQueryError('z-axis not supported')
 
@@ -206,12 +201,11 @@ class XarrayEDRProvider(BaseEDRProvider, XarrayProvider):
         LOGGER.debug(f'query parameters: {query_params}')
         try:
             if select_properties:
-                self.fields = {k: v for k, v in self.fields.items() if k in select_properties}  # noqa
+                self.fields = select_properties
                 data = self._data[[*select_properties]]
             else:
                 data = self._data
             data = data.sel(query_params)
-            data = _convert_float32_to_float64(data)
         except KeyError:
             raise ProviderNoDataError()
 
@@ -258,7 +252,7 @@ class XarrayEDRProvider(BaseEDRProvider, XarrayProvider):
                 LOGGER.debug('Reversing slicing from high to low')
                 return slice(end, begin)
         else:
-            return np.datetime64(datetime_)
+            return datetime_
 
     def _get_time_range(self, data):
         """
@@ -294,11 +288,3 @@ class XarrayEDRProvider(BaseEDRProvider, XarrayProvider):
         except KeyError:
             time_steps = kwargs.get('limit')
         return time, time_steps
-
-    def _configure_bbox(self, bbox):
-        xmin, ymin, xmax, ymax = 0, 1, 2, 3
-        if self._data[self.x_field][0] > self._data[self.x_field][-1]:
-            xmin, xmax = xmax, xmin
-        if self._data[self.y_field][0] > self._data[self.y_field][-1]:
-            ymin, ymax = ymax, ymin
-        return xmin, ymin, xmax, ymax

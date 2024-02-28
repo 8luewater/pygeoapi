@@ -103,8 +103,10 @@ Data access examples
   * http://localhost:5000/collections
 * overview of dataset
   * http://localhost:5000/collections/foo
-* schema of dataset
-  * http://localhost:5000/collections/foo/schema
+* coverage rangetype
+  * http://localhost:5000/collections/foo/coverage/rangetype
+* coverage domainset
+  * http://localhost:5000/collections/foo/coverage/domainset
 * coverage access via CoverageJSON (default)
   * http://localhost:5000/collections/foo/coverage?f=json
 * coverage access via native format (as defined in ``provider.format.name``)
