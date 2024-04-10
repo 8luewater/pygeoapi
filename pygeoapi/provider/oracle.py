@@ -45,6 +45,13 @@ LOGGER = logging.getLogger(__name__)
 
 oracledb.init_oracle_client()
 
+#debug - Saya's logger
+MESSAGE_LEVEL = 10
+LOGFILE_NAME = 'pygeoapi.log'
+def msg(m,s=10):
+        if s >= MESSAGE_LEVEL:
+            with open(LOGFILE_NAME, 'a') as f:
+                f.write('{}\n'.format(m))
 
 class DatabaseConnection:
     """Database connection class to be used as 'with' statement.
@@ -533,6 +540,9 @@ class OracleProvider(BaseProvider):
             # Create dictionary for sql bind variables
             bind_variables = {**where_dict["properties"], **paging_bind}
 
+            #debug
+            msg("SAYA bind_variables1: {}".format(bind_variables))
+
             # SQL manipulation plugin
             if self.sql_manipulator:
                 LOGGER.debug("sql_manipulator: " + self.sql_manipulator)
@@ -546,12 +556,18 @@ class OracleProvider(BaseProvider):
                     self.source_crs,
                     properties,
                 )
+            
+            #debug
+            msg("SAYA bind_variables2: {}".format(bind_variables))
 
             # Clean up placeholders that aren't used by the
             # manipulation class.
             sql_query = sql_query.replace("#HINTS#", "")
             sql_query = sql_query.replace("#JOIN#", "")
             sql_query = sql_query.replace("#WHERE#", "")
+
+            #debug
+            sql_query = sql_query.replace("GEOMETRY", "geometry")
 
             LOGGER.debug(f"SQL Query: {sql_query}")
             LOGGER.debug(f"Bind variables: {bind_variables}")
