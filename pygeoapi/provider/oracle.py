@@ -614,12 +614,17 @@ class OracleProvider(BaseProvider):
         msg("Printing id_field: {}".format(self.id_field))
         msg("Printing identifier: {}".format(identifier))
 
-        #bind_variables = {self.id_field: identifier}
+        #debug - enabled below again for testing
+        bind_variables = {self.id_field: identifier}
 
         LOGGER.debug(f"SQL Query: {sql}")
-        #LOGGER.debug(f"Bind variables: {str(bind_variables)}")
+        #debug - enabled below again for testing
+        LOGGER.debug(f"Bind variables: {str(bind_variables)}")
 
-        cursor.execute(sql)#, bind_variables)
+        #debug - enabled below again for testing
+        cursor.execute(sql, bind_variables)
+        #debug - disabled below again for testing
+        #cursor.execute(sql)#, bind_variables)
 
         item = cursor.fetchall()
         id = item[0][0] if item else None
@@ -640,12 +645,17 @@ class OracleProvider(BaseProvider):
                    AND \"{self.id_field}\" > {identifier} \
                  ORDER BY \"{self.id_field}\" ASC"
 
-        #bind_variables = {self.id_field: identifier}
+        #debug - enabled below again for testing
+        bind_variables = {self.id_field: identifier}
 
         LOGGER.debug(f"SQL Query: {sql}")
-        #LOGGER.debug(f"Bind variables: {str(bind_variables)}")
+        #debug - enabled below again for testing
+        LOGGER.debug(f"Bind variables: {str(bind_variables)}")
 
-        cursor.execute(sql)#, bind_variables)
+        #debug - enabled below again for testing
+        cursor.execute(sql, bind_variables)
+        #debug - disabled below again for testing
+        #cursor.execute(sql)#, bind_variables)
 
         item = cursor.fetchall()
         id = item[0][0] if item else None
