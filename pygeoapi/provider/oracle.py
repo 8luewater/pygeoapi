@@ -705,6 +705,9 @@ class OracleProvider(BaseProvider):
                     self.sql_manipulator_options,
                     identifier,
                 )
+            
+            #debug - replace GEOMETRYFIELD with geometryfield
+            sql_query = sql_query.replace("GEOMETRYFIELD", "geometryfield")
 
             LOGGER.debug(f"SQL Query: {sql_query}")
             LOGGER.debug(f"Identifier: {identifier}")
